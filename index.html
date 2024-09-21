@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: 'Arial', sans-serif;
-            background-color: #f7f9fc;
+            background-color: #f4f7fb;
             margin: 0;
             padding: 0;
             display: flex;
@@ -17,14 +17,17 @@
         }
 
         .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             text-align: center;
+            width: 500px;
+            max-width: 90%;
         }
 
         h1 {
+            font-size: 24px;
             margin-bottom: 20px;
             color: #333;
         }
@@ -33,31 +36,69 @@
             margin: 20px 0;
             padding: 10px;
             border: 1px solid #ccc;
-            border-radius: 5px;
+            border-radius: 8px;
             width: 100%;
             max-width: 300px;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
         }
 
         input[type="file"]:hover {
-            border-color: #888;
+            border-color: #007bff;
         }
 
-        a {
-            display: inline-block;
+        .file-wrapper {
             margin-top: 20px;
-            padding: 10px 20px;
+        }
+
+        .file-item {
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .file-item span {
+            display: inline-block;
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        button, a.download-btn {
+            padding: 12px 20px;
             background-color: #007bff;
             color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            text-decoration: none; /* Remove underline from anchor buttons */
+            display: inline-block;
         }
 
-        a:hover {
+        button:hover, a.download-btn:hover {
             background-color: #0056b3;
+            box-shadow: 0 6px 15px rgba(0, 91, 187, 0.4);
         }
 
-        .hidden {
+        button:active, a.download-btn:active {
+            background-color: #003e8a;
+            box-shadow: none;
+        }
+
+        button:focus, a.download-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
+        }
+
+        button[disabled] {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        a.hidden {
             display: none;
         }
     </style>
@@ -65,45 +106,121 @@
 <body>
     <div class="container">
         <h1>WebP to PNG Converter</h1>
-        <input type="file" id="fileInput" accept=".webp">
-        <canvas id="canvas" style="display:none;"></canvas>
-        <a id="downloadLink" class="hidden">Download PNG</a>
+        <input type="file" id="fileInput" accept=".webp" multiple>
+        <div class="file-wrapper" id="fileWrapper"></div>
+        <button id="convertAllBtn" class="hidden">Convert All</button>
+        <button id="downloadAllBtn" class="hidden">Download All as ZIP</button>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
     <script>
-        document.getElementById('fileInput').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            
-            if (file && file.type === 'image/webp') {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    const img = new Image();
-                    img.src = e.target.result;
+        const fileInput = document.getElementById('fileInput');
+        const fileWrapper = document.getElementById('fileWrapper');
+        const convertAllBtn = document.getElementById('convertAllBtn');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        let imagesData = [];
 
-                    img.onload = function() {
-                        const canvas = document.getElementById('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
+        // Handle file input change
+        fileInput.addEventListener('change', function(event) {
+            fileWrapper.innerHTML = ''; // Clear previous file list
+            imagesData = [];
+            const files = event.target.files;
 
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-
-                        // Convert the canvas to PNG
-                        const pngDataUrl = canvas.toDataURL('image/png');
-
-                        // Create a download link
-                        const downloadLink = document.getElementById('downloadLink');
-                        downloadLink.href = pngDataUrl;
-                        downloadLink.download = 'converted-image.png';
-                        downloadLink.classList.remove('hidden');
-                        downloadLink.innerText = 'Download PNG';
-                    };
-                };
-                
-                reader.readAsDataURL(file);
+            if (files.length > 0) {
+                convertAllBtn.classList.remove('hidden');
+                downloadAllBtn.classList.add('hidden'); // Hide download button until conversion
             } else {
-                alert('Please select a valid WebP image.');
+                convertAllBtn.classList.add('hidden');
+                downloadAllBtn.classList.add('hidden');
             }
+
+            // Loop through uploaded files
+            Array.from(files).forEach((file, index) => {
+                if (file.type === 'image/webp') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.src = e.target.result;
+
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            ctx.drawImage(img, 0, 0);
+
+                            // Create a div to hold the filename and buttons
+                            const fileDiv = document.createElement('div');
+                            fileDiv.classList.add('file-item');
+
+                            const fileName = document.createElement('span');
+                            fileName.innerText = `${file.name}`;
+
+                            const convertBtn = document.createElement('button');
+                            convertBtn.innerText = `Convert`;
+                            convertBtn.addEventListener('click', () => {
+                                convertImage(canvas, index);
+                            });
+
+                            const downloadBtn = document.createElement('a');
+                            downloadBtn.classList.add('hidden', 'download-btn');
+                            downloadBtn.innerText = `Download`;
+                            downloadBtn.download = `${file.name.split('.webp')[0]}.png`;
+
+                            fileDiv.appendChild(fileName);
+                            fileDiv.appendChild(convertBtn);
+                            fileDiv.appendChild(downloadBtn);
+
+                            fileWrapper.appendChild(fileDiv);
+
+                            // Store data
+                            imagesData.push({
+                                file,
+                                canvas,
+                                downloadBtn,
+                                converted: false
+                            });
+                        };
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        // Convert individual image
+        function convertImage(canvas, index) {
+            const pngDataUrl = canvas.toDataURL('image/png');
+            imagesData[index].converted = true;
+            imagesData[index].downloadBtn.href = pngDataUrl;
+            imagesData[index].downloadBtn.classList.remove('hidden');
+        }
+
+        // Convert all images
+        convertAllBtn.addEventListener('click', function() {
+            imagesData.forEach((imageData, index) => {
+                convertImage(imageData.canvas, index);
+            });
+            downloadAllBtn.classList.remove('hidden');
+        });
+
+        // Download all converted images as ZIP
+        downloadAllBtn.addEventListener('click', function() {
+            const zip = new JSZip();
+            const imgFolder = zip.folder('converted_images');
+            
+            imagesData.forEach((imageData, index) => {
+                if (imageData.converted) {
+                    const base64Data = imageData.canvas.toDataURL('image/png').split(',')[1];
+                    imgFolder.file(`${imageData.file.name.split('.webp')[0]}.png`, base64Data, {base64: true});
+                }
+            });
+
+            zip.generateAsync({type: 'blob'}).then(function(content) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(content);
+                a.download = 'converted_images.zip';
+                a.click();
+            });
         });
     </script>
 </body>
